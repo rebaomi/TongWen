@@ -102,7 +102,7 @@ export default function OptionsApp() {
       licenseKey,
       expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000, // 1 year
     }
-    chrome.storage.sync.set({ scholar_lens_subscription: info })
+    chrome.storage.sync.set({ tongwen_subscription: info })
     setSubscription(info)
     setLicenseKey('')
     setLicenseError('')
@@ -159,7 +159,7 @@ export default function OptionsApp() {
         <div className="flex items-center gap-2 mb-6 px-2">
           <span className="text-2xl">🎓</span>
           <div>
-            <div className="font-bold text-gray-900 dark:text-white">ScholarLens</div>
+            <div className="font-bold text-gray-900 dark:text-white">通文 TongWen</div>
             <div className="text-xs text-gray-400">设置</div>
           </div>
         </div>
@@ -517,7 +517,7 @@ export default function OptionsApp() {
                 <h3 className="font-semibold text-gray-900 dark:text-white">📊 今日使用统计</h3>
                 <button
                   onClick={async () => {
-                    await chrome.storage.local.remove('scholar_lens_usage')
+                    await chrome.storage.local.remove('tongwen_usage')
                     // 刷新 usage 数据
                     sendMessage<{ success: boolean; data: UsageStatus }>({ type: 'GET_USAGE' })
                       .then(r => { if (r?.success) setUsage(r.data) }).catch(() => {})

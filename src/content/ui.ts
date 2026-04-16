@@ -1,11 +1,11 @@
 // 内容脚本 UI 工具函数
 
 export function showErrorToast(message: string): void {
-  const existing = document.getElementById('scholar-error-toast')
+  const existing = document.getElementById('tongwen-error-toast')
   existing?.remove()
 
   const toast = document.createElement('div')
-  toast.id = 'scholar-error-toast'
+  toast.id = 'tongwen-error-toast'
   toast.className = 'scholar-error-toast'
   toast.innerHTML = `<span>⚠️ ${escapeHtml(message)}</span>`
   document.body.appendChild(toast)

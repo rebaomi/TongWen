@@ -119,7 +119,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <span className="text-xl">🎓</span>
             <div>
-              <div className="font-bold text-white text-base leading-none">ScholarLens</div>
+              <div className="font-bold text-white text-base leading-none">通文 TongWen</div>
               <div className="text-blue-200 text-xs">AI 学术翻译</div>
             </div>
           </div>

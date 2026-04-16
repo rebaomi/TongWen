@@ -164,7 +164,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
 }
 
 export const STORAGE_KEYS = {
-  SETTINGS: 'scholar_lens_settings',
-  USAGE: 'scholar_lens_usage',
-  SUBSCRIPTION: 'scholar_lens_subscription',
+  SETTINGS: 'tongwen_settings',
+  USAGE: 'tongwen_usage',
+  SUBSCRIPTION: 'tongwen_subscription',
 } as const

@@ -35,7 +35,7 @@ async function translatePage(): Promise<void> {
       panelApi?.setTranslating(true, Math.min(pct, 99))
     }
   } catch (err) {
-    console.error('[ScholarLens] Page translation error:', err)
+    console.error('[TongWen] Page translation error:', err)
   } finally {
     isPageTranslating = false
     hideLoadingBar()

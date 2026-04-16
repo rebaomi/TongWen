@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ScholarLens - AI 学术翻译",
+  "name": "通文 - AI 学术翻译",
   "version": "1.0.0",
   "description": "专注网页与学术 PDF 翻译，支持多引擎、双语对照、公式保留",
   "icons": {
