@@ -1,0 +1,91 @@
+name: CI / Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    name: Test & Build Extension
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tongwen-extension-${{ github.sha }}
+          path: dist/
+          retention-days: 30
+
+  release:
+    runs-on: ubuntu-latest
+    name: Create Release
+    needs: test-and-build
+    if: github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release:')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Zip extension
+        run: |
+          cd dist
+          zip -r ../tongwen-extension.zip .
+          cd ..
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: 通文 TongWen ${{ steps.version.outputs.version }}
+          body: |
+            ## 通文 TongWen ${{ steps.version.outputs.version }}
+
+            ### 安装方式
+            1. 下载 `tongwen-extension.zip` 并解压
+            2. 打开 Chrome 扩展管理页面 (`chrome://extensions`)
+            3. 开启「开发者模式」
+            4. 点击「加载已解压的扩展程序」，选择解压后的文件夹
+          files: tongwen-extension.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

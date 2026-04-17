@@ -52,11 +52,25 @@ export function hasCitations(text: string): boolean {
 
 // 检测节点是否应该跳过翻译（代码、公式等）
 export function shouldSkipNode(node: Element): boolean {
-  const skipTags = ['SCRIPT', 'STYLE', 'CODE', 'PRE', 'MATH', 'SVG', 'NOSCRIPT']
-  const skipClasses = ['MathJax', 'katex', 'highlight', 'hljs', 'code', 'prism']
+  const skipTags = [
+    'SCRIPT', 'STYLE', 'CODE', 'PRE', 'MATH', 'SVG', 'NOSCRIPT',
+    'TEXTAREA', 'INPUT', 'SELECT', 'BUTTON', 'CANVAS', 'IFRAME',
+    'KBD', 'SAMP', 'VAR', 'TT',  // 语义化代码标签
+  ]
+  const skipClasses = [
+    'MathJax', 'katex', 'highlight', 'hljs', 'code', 'prism',
+    'token', 'language-', 'sourceCode', 'rouge', 'pygments',
+    'no-translate', 'notranslate',
+  ]
+  const skipRoles = ['code', 'math', 'img', 'progressbar']
 
   if (skipTags.includes(node.tagName)) return true
-  if (node.closest('code, pre, math, .MathJax, .katex')) return true
-  if (skipClasses.some(cls => node.className?.includes?.(cls))) return true
+  if (node.closest('code, pre, math, .MathJax, .katex, [contenteditable]')) return true
+  if (node.getAttribute('translate') === 'no') return true
+  if (node.getAttribute('lang') && node.getAttribute('lang') !== 'en') return true
+  const role = node.getAttribute('role')
+  if (role && skipRoles.includes(role)) return true
+  const cls = node.className
+  if (typeof cls === 'string' && skipClasses.some(c => cls.includes(c))) return true
   return false
 }

@@ -7,6 +7,9 @@ import { getUsageStatus } from '@/utils/usage'
 import { FREE_DAILY_LIMIT } from '@/shared/types'
 import type { Message, MessageResponse, TranslateOptions, EngineId } from '@/shared/types'
 
+// Session-level translation cache: key = "engine:from:to:text" → translated
+const translationCache = new Map<string, string>()
+
 // 安装时初始化右键菜单
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -120,6 +123,9 @@ async function handleMessage(message: Message, sender: chrome.runtime.MessageSen
             autoTranslatePage: settings.autoTranslatePage,
             preserveFormulas: settings.preserveFormulas,
             theme: settings.theme,
+            showFloatingPanel: settings.showFloatingPanel,
+            siteOverrides: settings.siteOverrides ?? {},
+            excludedDomains: settings.excludedDomains ?? [],
           }
           return { success: true, data: safe }
         }
@@ -219,7 +225,32 @@ async function handleTranslateText(
   const engineConfig = settings.engines[options.engine]
   if (!engineConfig) throw new Error(`Engine ${options.engine} not configured`)
 
+  // 查缓存（仅限同一 session，SW 重启自动清空）
+  const cacheKey = `${options.engine}:${options.from}:${options.to}:${text}`
+  if (translationCache.has(cacheKey)) {
+    return { original: text, translated: translationCache.get(cacheKey)!, engine: options.engine }
+  }
+
   const result = await translate(text, options, engineConfig)
+
+  // 应用自定义术语表（后处理替换）
+  const glossary = settings.glossary ?? {}
+  if (Object.keys(glossary).length > 0) {
+    let translated = result.translated
+    for (const [term, replacement] of Object.entries(glossary)) {
+      if (term && replacement) {
+        translated = translated.replaceAll(term, replacement)
+      }
+    }
+    result.translated = translated
+  }
+
+  // 写缓存（限制大小，防止无限增长）
+  if (translationCache.size > 2000) {
+    const firstKey = translationCache.keys().next().value
+    if (firstKey !== undefined) translationCache.delete(firstKey)
+  }
+  translationCache.set(cacheKey, result.translated)
 
   // 只有明确要求计次时才递增（划词、右键单次翻译）
   if (countAsUsage && !pro) {

@@ -9,10 +9,19 @@ function isContextInvalidated(err: unknown): boolean {
     msg.includes('Cannot access a chrome')
 }
 
-// 向 background 发送翻译请求
-// countAsUsage=true：本次调用计 1 次使用（划词、右键）
-// countAsUsage=false（默认）：页面/PDF 批量翻译时由上层统一计次
-export async function translateText(text: string, countAsUsage = false): Promise<TranslateResult> {
+// 判断是否属于可重试的网络/超时错误（非上限、非上下文失效）
+function isRetryableError(msg: string): boolean {
+  if (msg.includes('LIMIT_EXCEEDED')) return false
+  if (msg.includes('CONTEXT_INVALIDATED')) return false
+  if (msg.includes('not configured')) return false
+  if (msg.includes('Unauthorized')) return false
+  // 网络超时、rate limit、服务器 5xx 可重试
+  return msg.includes('fetch') || msg.includes('network') || msg.includes('timeout') ||
+    msg.includes('rate') || msg.includes('500') || msg.includes('502') ||
+    msg.includes('503') || msg.includes('504') || msg.includes('ECONNRESET')
+}
+
+function sendTranslateMessage(text: string, countAsUsage: boolean): Promise<TranslateResult> {
   return new Promise((resolve, reject) => {
     try {
       chrome.runtime.sendMessage(
@@ -20,11 +29,8 @@ export async function translateText(text: string, countAsUsage = false): Promise
         (response: { success: boolean; data: TranslateResult; error?: string }) => {
           if (chrome.runtime.lastError) {
             const err = new Error(chrome.runtime.lastError.message ?? 'Unknown error')
-            if (isContextInvalidated(err)) {
-              reject(new Error('CONTEXT_INVALIDATED'))
-            } else {
-              reject(err)
-            }
+            if (isContextInvalidated(err)) reject(new Error('CONTEXT_INVALIDATED'))
+            else reject(err)
             return
           }
           if (response?.success) resolve(response.data)
@@ -32,13 +38,30 @@ export async function translateText(text: string, countAsUsage = false): Promise
         }
       )
     } catch (e) {
-      if (isContextInvalidated(e)) {
-        reject(new Error('CONTEXT_INVALIDATED'))
-      } else {
-        reject(e)
-      }
+      if (isContextInvalidated(e)) reject(new Error('CONTEXT_INVALIDATED'))
+      else reject(e)
     }
   })
+}
+
+// 向 background 发送翻译请求（含自动重试）
+// countAsUsage=true：本次调用计 1 次使用（划词、右键）
+// countAsUsage=false（默认）：页面/PDF 批量翻译时由上层统一计次
+export async function translateText(text: string, countAsUsage = false, maxRetries = 2): Promise<TranslateResult> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await sendTranslateMessage(text, countAsUsage)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      if (attempt < maxRetries && isRetryableError(msg)) {
+        // 指数退避：300ms, 600ms
+        await new Promise(r => setTimeout(r, 300 * (attempt + 1)))
+        continue
+      }
+      throw err
+    }
+  }
+  throw new Error('Translation failed after retries')
 }
 
 // 向 background 记录 1 次使用（页面翻译/PDF翻译触发时调用一次）

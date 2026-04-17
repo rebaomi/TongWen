@@ -47,6 +47,14 @@ export interface UserSettings {
   preserveCitations: boolean
   theme: 'light' | 'dark' | 'system'
   showFloatingPanel: boolean
+  glossary: Record<string, string>  // 自定义术语表：原文 → 译文
+  siteOverrides: Record<string, SiteOverride>  // 按域名覆盖引擎/模式
+}
+
+export interface SiteOverride {
+  engine?: EngineId
+  translateMode?: TranslateMode
+  disabled?: boolean  // 在该域名禁用翻译
 }
 
 // ===== 使用量 & Pro =====

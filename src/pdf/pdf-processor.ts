@@ -39,8 +39,67 @@ export async function extractPdfText(pdfDoc: PDFDocumentProxy): Promise<PageText
   return allPages
 }
 
-// 将 PDF 文字元素按段落合并
+// 检测是否为双栏布局，返回分割的 X 中线（不是双栏则返回 null）
+function detectTwoColumnSplit(items: TextItem[]): number | null {
+  if (items.length < 20) return null
+
+  // 收集所有文字 X 坐标（左边界）
+  const xValues = items.map(it => it.transform[4]).sort((a, b) => a - b)
+  const minX = xValues[0]
+  const maxX = xValues[xValues.length - 1]
+  const pageWidth = maxX - minX
+  if (pageWidth < 100) return null
+
+  // 将页面水平分成 20 个区间，找空白区
+  const BINS = 20
+  const binWidth = pageWidth / BINS
+  const binCount = new Array<number>(BINS).fill(0)
+  for (const x of xValues) {
+    const bin = Math.min(Math.floor((x - minX) / binWidth), BINS - 1)
+    binCount[bin]++
+  }
+
+  // 在中间 30%~70% 范围内找最空的 bin（栏间空白区）
+  const lo = Math.floor(BINS * 0.3)
+  const hi = Math.ceil(BINS * 0.7)
+  let minCount = Infinity
+  let splitBin = -1
+  for (let i = lo; i < hi; i++) {
+    if (binCount[i] < minCount) {
+      minCount = binCount[i]
+      splitBin = i
+    }
+  }
+
+  // 如果该 bin 的密度显著低于平均（< 20%），认为是双栏
+  const avgCount = xValues.length / BINS
+  if (minCount < avgCount * 0.2) {
+    return minX + (splitBin + 0.5) * binWidth
+  }
+  return null
+}
+
+// 将 PDF 文字元素按段落合并（支持双栏）
 function groupTextItems(items: TextItem[], pageNum: number): PageTextBlock[] {
+  if (items.length === 0) return []
+
+  // 尝试检测双栏布局
+  const splitX = detectTwoColumnSplit(items)
+  if (splitX !== null) {
+    // 分别处理左栏和右栏，然后合并（左栏优先）
+    const leftItems = items.filter(it => it.transform[4] < splitX)
+    const rightItems = items.filter(it => it.transform[4] >= splitX)
+    return [
+      ...groupSingleColumn(leftItems, pageNum),
+      ...groupSingleColumn(rightItems, pageNum),
+    ]
+  }
+
+  return groupSingleColumn(items, pageNum)
+}
+
+// 将单栏文字元素按段落合并
+function groupSingleColumn(items: TextItem[], pageNum: number): PageTextBlock[] {
   if (items.length === 0) return []
 
   // ── 第一阶段：按 Y 坐标合并成行 ──────────────────────────────────
@@ -88,7 +147,6 @@ function groupTextItems(items: TextItem[], pageNum: number): PageTextBlock[] {
   for (let i = 1; i < lines.length; i++) {
     const gap = lines[i - 1].y - lines[i].y
     if (gap > PARA_THRESHOLD) {
-      // 到达段落边界，提交当前段落
       paragraphs.push(mergeLines(pageNum, paraLines))
       paraLines = []
     }

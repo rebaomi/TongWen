@@ -161,6 +161,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   preserveCitations: true,
   theme: 'system',
   showFloatingPanel: false,
+  glossary: {},
+  siteOverrides: {},
 }
 
 export const STORAGE_KEYS = {

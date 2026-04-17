@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { UserSettings, EngineId, SubscriptionInfo } from '@/shared/types'
+import type { UserSettings, EngineId, SubscriptionInfo, SiteOverride } from '@/shared/types'
 import { ENGINE_INFO, SUPPORTED_LANGUAGES, DEFAULT_SETTINGS } from '@/shared/constants'
 import { FREE_DAILY_LIMIT } from '@/shared/types'
 import type { UsageStatus } from '@/utils/usage'
@@ -511,6 +511,19 @@ export default function OptionsApp() {
               </div>
             </div>
 
+            {/* 自定义术语表 */}
+            <GlossaryEditor
+              glossary={settings.glossary ?? {}}
+              onChange={glossary => save({ glossary })}
+            />
+
+            {/* 按域名配置 */}
+            <SiteOverrideEditor
+              siteOverrides={settings.siteOverrides ?? {}}
+              onChange={siteOverrides => save({ siteOverrides })}
+              engines={(Object.keys(ENGINE_INFO) as EngineId[]).filter(id => settings.engines[id]?.enabled)}
+            />
+
             {/* 今日使用统计 */}
             <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5">
               <div className="flex items-center justify-between mb-3">
@@ -545,6 +558,8 @@ export default function OptionsApp() {
             </div>
           </div>
         )}
+
+        {/* ===== 术语表 & 按域名配置（子组件在文件底部） ===== */}
 
         {/* ===== 升级 Pro ===== */}
         {activeSection === 'upgrade' && (
@@ -620,6 +635,182 @@ export default function OptionsApp() {
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+// ===== 自定义术语表组件 =====
+function GlossaryEditor({
+  glossary,
+  onChange,
+}: {
+  glossary: Record<string, string>
+  onChange: (g: Record<string, string>) => void
+}) {
+  const [newTerm, setNewTerm] = useState('')
+  const [newReplace, setNewReplace] = useState('')
+
+  const entries = Object.entries(glossary)
+
+  const addEntry = () => {
+    const t = newTerm.trim()
+    const r = newReplace.trim()
+    if (!t || !r) return
+    onChange({ ...glossary, [t]: r })
+    setNewTerm('')
+    setNewReplace('')
+  }
+
+  const removeEntry = (term: string) => {
+    const next = { ...glossary }
+    delete next[term]
+    onChange(next)
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-900 dark:text-white">📚 自定义术语表</h3>
+        <p className="text-xs text-gray-500 mt-1">翻译结果中自动替换指定词汇，适合专有名词、品牌词</p>
+      </div>
+      {entries.length > 0 && (
+        <div className="space-y-2">
+          {entries.map(([term, replacement]) => (
+            <div key={term} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg text-sm">
+              <span className="flex-1 font-mono text-gray-600 dark:text-gray-400 truncate">{term}</span>
+              <span className="text-gray-400">→</span>
+              <span className="flex-1 font-mono text-blue-600 dark:text-blue-400 truncate">{replacement}</span>
+              <button onClick={() => removeEntry(term)} className="text-gray-400 hover:text-red-500 ml-1">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="原文（如 Transformer）"
+          value={newTerm}
+          onChange={e => setNewTerm(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addEntry()}
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+        />
+        <span className="self-center text-gray-400">→</span>
+        <input
+          type="text"
+          placeholder="译文（如 变换器）"
+          value={newReplace}
+          onChange={e => setNewReplace(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addEntry()}
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+        />
+        <button
+          onClick={addEntry}
+          disabled={!newTerm.trim() || !newReplace.trim()}
+          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white text-sm font-medium transition-colors"
+        >
+          添加
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ===== 按域名配置组件 =====
+function SiteOverrideEditor({
+  siteOverrides,
+  onChange,
+  engines,
+}: {
+  siteOverrides: Record<string, SiteOverride>
+  onChange: (overrides: Record<string, SiteOverride>) => void
+  engines: EngineId[]
+}) {
+  const [newDomain, setNewDomain] = useState('')
+  const entries = Object.entries(siteOverrides)
+
+  const addDomain = () => {
+    const d = newDomain.trim().replace(/^https?:\/\//, '').split('/')[0]
+    if (!d) return
+    onChange({ ...siteOverrides, [d]: {} })
+    setNewDomain('')
+  }
+
+  const updateOverride = (domain: string, patch: Partial<SiteOverride>) => {
+    onChange({ ...siteOverrides, [domain]: { ...siteOverrides[domain], ...patch } })
+  }
+
+  const removeOverride = (domain: string) => {
+    const next = { ...siteOverrides }
+    delete next[domain]
+    onChange(next)
+  }
+
+  return (
+    <div className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-5 space-y-4">
+      <div>
+        <h3 className="font-semibold text-gray-900 dark:text-white">🌐 按域名配置</h3>
+        <p className="text-xs text-gray-500 mt-1">为特定网站单独设置翻译引擎或模式</p>
+      </div>
+      {entries.length > 0 && (
+        <div className="space-y-3">
+          {entries.map(([domain, override]) => (
+            <div key={domain} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-sm text-gray-800 dark:text-gray-200">{domain}</span>
+                <button onClick={() => removeOverride(domain)} className="text-gray-400 hover:text-red-500 text-sm">删除</button>
+              </div>
+              <div className="flex gap-2">
+                <select
+                  value={override.engine ?? ''}
+                  onChange={e => updateOverride(domain, { engine: (e.target.value as EngineId) || undefined })}
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs"
+                >
+                  <option value="">默认引擎</option>
+                  {engines.map(id => (
+                    <option key={id} value={id}>{ENGINE_INFO[id].name}</option>
+                  ))}
+                </select>
+                <select
+                  value={override.translateMode ?? ''}
+                  onChange={e => updateOverride(domain, { translateMode: (e.target.value as 'bilingual' | 'replace' | 'hover') || undefined })}
+                  className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs"
+                >
+                  <option value="">默认模式</option>
+                  <option value="bilingual">双语对照</option>
+                  <option value="replace">全文替换</option>
+                  <option value="hover">悬浮翻译</option>
+                </select>
+                <label className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={override.disabled ?? false}
+                    onChange={e => updateOverride(domain, { disabled: e.target.checked })}
+                    className="rounded"
+                  />
+                  禁用
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <input
+          type="text"
+          placeholder="域名（如 github.com）"
+          value={newDomain}
+          onChange={e => setNewDomain(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addDomain()}
+          className="flex-1 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm"
+        />
+        <button
+          onClick={addDomain}
+          disabled={!newDomain.trim()}
+          className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 text-white text-sm font-medium transition-colors"
+        >
+          添加
+        </button>
+      </div>
     </div>
   )
 }

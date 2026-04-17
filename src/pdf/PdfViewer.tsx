@@ -4,6 +4,42 @@ import { loadPdf, extractPdfText, translateBlock, renderPageToCanvas } from './p
 import type { TranslatedPage } from './pdf-processor'
 import { exportBilingualPdf, downloadFile } from './pdf-exporter'
 
+// ── 进度持久化工具 ──────────────────────────────────────────
+const PROGRESS_KEY_PREFIX = 'tongwen_pdf_progress_'
+
+function getPdfProgressKey(pdfId: string): string {
+  return PROGRESS_KEY_PREFIX + pdfId.slice(0, 80)
+}
+
+function saveProgress(pdfId: string, pages: TranslatedPage[]): void {
+  try {
+    const data = pages.map(p => ({
+      pageNum: p.pageNum,
+      translatedTexts: p.translatedTexts,
+      width: p.width,
+      height: p.height,
+      // originalBlocks 太大，只存文本
+      originalTexts: p.originalBlocks.map(b => b.text),
+    }))
+    sessionStorage.setItem(getPdfProgressKey(pdfId), JSON.stringify(data))
+  } catch { /* storage full */ }
+}
+
+function loadProgress(pdfId: string): Map<number, Pick<TranslatedPage, 'pageNum' | 'translatedTexts' | 'width' | 'height'>> {
+  try {
+    const raw = sessionStorage.getItem(getPdfProgressKey(pdfId))
+    if (!raw) return new Map()
+    const data = JSON.parse(raw) as { pageNum: number; translatedTexts: string[]; width: number; height: number }[]
+    const map = new Map<number, Pick<TranslatedPage, 'pageNum' | 'translatedTexts' | 'width' | 'height'>>()
+    for (const p of data) map.set(p.pageNum, p)
+    return map
+  } catch { return new Map() }
+}
+
+function clearProgress(pdfId: string): void {
+  sessionStorage.removeItem(getPdfProgressKey(pdfId))
+}
+
 type ViewMode = 'original' | 'bilingual' | 'translated'
 
 export default function PdfViewer() {
@@ -54,12 +90,18 @@ export default function PdfViewer() {
     setSourceUrl(trimmed)
     setPdfDoc(null)
     setTranslatedPages(new Map())
+    pdfIdRef.current = trimmed
     try {
       // 通过插件后台 fetch 绕过页面级 CORS（extension page 有 host_permissions）
       const doc = await loadPdf(trimmed)
       setPdfDoc(doc)
       setTotalPages(doc.numPages)
       setCurrentPage(1)
+      setPageRangeFrom(1)
+      setPageRangeTo(doc.numPages)
+      // 检查是否有断点续翻进度
+      const cached = loadProgress(trimmed)
+      setResumable(cached.size > 0)
     } catch (e) {
       setError(`无法加载 PDF：${e}\n\n如果是跨域问题，请尝试下载后再拖入。`)
     } finally {
@@ -74,12 +116,17 @@ export default function PdfViewer() {
     setSourceUrl('')
     setPdfDoc(null)
     setTranslatedPages(new Map())
+    pdfIdRef.current = file.name + '_' + file.size
     try {
       const buffer = await file.arrayBuffer()
       const doc = await loadPdf(buffer)
       setPdfDoc(doc)
       setTotalPages(doc.numPages)
       setCurrentPage(1)
+      setPageRangeFrom(1)
+      setPageRangeTo(doc.numPages)
+      const cached = loadProgress(pdfIdRef.current)
+      setResumable(cached.size > 0)
     } catch (e) {
       setError(`无法加载 PDF：${e}`)
     } finally {
@@ -87,13 +134,41 @@ export default function PdfViewer() {
     }
   }
 
-  // 翻译所有页面
+  // 恢复上次翻译进度
+  const handleResumeProgress = async () => {
+    if (!pdfDoc || !pdfIdRef.current) return
+    const cached = loadProgress(pdfIdRef.current)
+    if (cached.size === 0) return
+    setIsTranslating(true)
+    try {
+      const allPageBlocks = await extractPdfText(pdfDoc)
+      const newMap = new Map(translatedPages)
+      for (const [pageNum, saved] of cached) {
+        const blocks = allPageBlocks[pageNum - 1] ?? []
+        newMap.set(pageNum, {
+          pageNum,
+          originalBlocks: blocks,
+          translatedTexts: saved.translatedTexts,
+          width: saved.width,
+          height: saved.height,
+        })
+      }
+      setTranslatedPages(newMap)
+      setResumable(false)
+    } finally {
+      setIsTranslating(false)
+    }
+  }
+
+  // 翻译指定页范围
   const handleTranslateAll = async () => {
     if (!pdfDoc) return
     setIsTranslating(true)
     setProgress(0)
 
     const newMap = new Map(translatedPages)
+    const fromPage = Math.max(1, pageRangeFrom)
+    const toPage = pageRangeTo > 0 ? Math.min(totalPages, pageRangeTo) : totalPages
 
     try {
       // PDF 整体翻译只计 1 次使用
@@ -109,10 +184,12 @@ export default function PdfViewer() {
       }
 
       const allPageBlocks = await extractPdfText(pdfDoc)
+      // 仅处理选定页范围
+      const targetBlocks = allPageBlocks.slice(fromPage - 1, toPage)
 
-      for (let i = 0; i < allPageBlocks.length; i++) {
-        const pageNum = i + 1
-        const blocks = allPageBlocks[i]
+      for (let i = 0; i < targetBlocks.length; i++) {
+        const pageNum = fromPage + i
+        const blocks = targetBlocks[i]
         const translatedTexts: string[] = []
 
         for (const block of blocks) {
@@ -132,23 +209,36 @@ export default function PdfViewer() {
         const page = await pdfDoc.getPage(pageNum)
         const viewport = page.getViewport({ scale: 1 })
 
-        newMap.set(pageNum, {
+        const translatedPage: TranslatedPage = {
           pageNum,
           originalBlocks: blocks,
           translatedTexts,
           width: viewport.width,
           height: viewport.height,
-        })
-
+        }
+        newMap.set(pageNum, translatedPage)
         setTranslatedPages(new Map(newMap))
-        setProgress(Math.round(((i + 1) / allPageBlocks.length) * 100))
+        setProgress(Math.round(((i + 1) / targetBlocks.length) * 100))
+
+        // 实时保存进度（断点续翻）
+        if (pdfIdRef.current) {
+          saveProgress(pdfIdRef.current, Array.from(newMap.values()))
+        }
       }
+
+      // 全部完成后标记无需恢复
+      setResumable(false)
+      if (pdfIdRef.current) clearProgress(pdfIdRef.current)
     } finally {
       setIsTranslating(false)
     }
   }
 
   const [isExporting, setIsExporting] = useState(false)
+  const [pageRangeFrom, setPageRangeFrom] = useState(1)
+  const [pageRangeTo, setPageRangeTo] = useState(0)  // 0 = 全部
+  const [resumable, setResumable] = useState(false)  // 是否有可恢复的进度
+  const pdfIdRef = useRef<string>('')  // 当前 PDF 标识符（URL 或文件名）
 
   const handleExportBilingual = async () => {
     if (translatedPages.size === 0 || !pdfDoc) return
@@ -262,6 +352,27 @@ export default function PdfViewer() {
                 </div>
               </div>
 
+              {/* 页码范围 */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">翻译页码范围</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number" min={1} max={totalPages}
+                    value={pageRangeFrom}
+                    onChange={e => setPageRangeFrom(Math.max(1, Math.min(totalPages, Number(e.target.value))))}
+                    className="w-16 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-center"
+                  />
+                  <span className="text-xs text-gray-400">至</span>
+                  <input
+                    type="number" min={1} max={totalPages}
+                    value={pageRangeTo || totalPages}
+                    onChange={e => setPageRangeTo(Math.max(1, Math.min(totalPages, Number(e.target.value))))}
+                    className="w-16 px-2 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs text-center"
+                  />
+                  <span className="text-xs text-gray-400">/ {totalPages}</span>
+                </div>
+              </div>
+
               {/* 翻译按钮 */}
               <button
                 onClick={handleTranslateAll}
@@ -273,7 +384,9 @@ export default function PdfViewer() {
                     <span className="animate-spin">⟳</span>
                     翻译中 {progress}%
                   </>
-                ) : '🚀 开始翻译全文'}
+                ) : (pageRangeTo && pageRangeTo < totalPages)
+                  ? `🚀 翻译第 ${pageRangeFrom}–${pageRangeTo} 页`
+                  : '🚀 开始翻译全文'}
               </button>
 
               {/* 进度条 */}
@@ -284,6 +397,16 @@ export default function PdfViewer() {
                     style={{ width: `${progress}%` }}
                   />
                 </div>
+              )}
+
+              {/* 断点续翻 */}
+              {resumable && !isTranslating && (
+                <button
+                  onClick={handleResumeProgress}
+                  className="w-full py-2 rounded-lg border border-amber-400 text-amber-700 hover:bg-amber-50 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  ⚡ 恢复上次进度
+                </button>
               )}
 
               {/* 导出 */}
