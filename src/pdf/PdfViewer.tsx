@@ -5,7 +5,7 @@ import type { TranslatedPage } from './pdf-processor'
 import { exportBilingualPdf, downloadFile } from './pdf-exporter'
 
 // ── 进度持久化工具 ──────────────────────────────────────────
-const PROGRESS_KEY_PREFIX = 'tongwen_pdf_progress_'
+const PROGRESS_KEY_PREFIX = 'xiaoyi_pdf_progress_'
 
 function getPdfProgressKey(pdfId: string): string {
   return PROGRESS_KEY_PREFIX + pdfId.slice(0, 80)

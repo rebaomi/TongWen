@@ -14,7 +14,7 @@ import type { Message, MessageResponse, TranslateOptions, EngineId, ChatMessage,
 const translationCache = new Map<string, string>()
 
 // ── 高亮标注持久化 ────────────────────────────────────────────
-const HIGHLIGHTS_KEY = 'tongwen_highlights'
+const HIGHLIGHTS_KEY = 'xiaoyi_highlights'
 
 async function getAllHighlights(): Promise<Highlight[]> {
   const r = await chrome.storage.local.get(HIGHLIGHTS_KEY)
@@ -34,7 +34,7 @@ async function deleteHighlight(id: string): Promise<void> {
 
 // ── AI Chat 流式端口 ──────────────────────────────────────────
 chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'tongwen-ai-chat') return
+  if (port.name !== 'xiaoyi-ai-chat') return
 
   port.onMessage.addListener(async (msg: {
     messages: ChatMessage[]

@@ -229,7 +229,7 @@ export interface AiSidebarApi {
 export function createAiSidebar(): AiSidebarApi {
   // Shadow DOM 容器
   const host = document.createElement('div')
-  host.id = 'tongwen-ai-sidebar'
+  host.id = 'xiaoyi-ai-sidebar'
   document.documentElement.appendChild(host)
   const shadow = host.attachShadow({ mode: 'open' })
 
@@ -410,7 +410,7 @@ export function createAiSidebar(): AiSidebarApi {
     sendBtn.disabled = true
     const streamer = appendStreamingBubble()
 
-    const port = chrome.runtime.connect({ name: 'tongwen-ai-chat' })
+    const port = chrome.runtime.connect({ name: 'xiaoyi-ai-chat' })
     port.postMessage({
       messages: messages.slice(0, -1).concat(msg),  // all including current
       context: contextEnabled ? pageContext : undefined,

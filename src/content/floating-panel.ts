@@ -263,7 +263,7 @@ export function createFloatingPanel(
 } {
   // Shadow DOM 宿主
   const host = document.createElement('div')
-  host.id = 'tongwen-panel-host'
+  host.id = 'xiaoyi-panel-host'
   const shadow = host.attachShadow({ mode: 'open' })
 
   // 注入样式
@@ -292,7 +292,7 @@ export function createFloatingPanel(
   header.id = 'header'
   header.innerHTML = `
     <span id="logo">🎓</span>
-    <span id="title">通文 TongWen</span>
+    <span id="title">晓译 XiaoYi</span>
     <button class="header-btn" id="btn-minimize" title="最小化">─</button>
     <button class="header-btn" id="btn-close" title="关闭">×</button>
   `
@@ -406,7 +406,7 @@ export function createFloatingPanel(
 
   // 如果用户曾经关闭过面板，默认隐藏（等待 popup 唤醒）
   try {
-    if (localStorage.getItem('tongwen-panel-closed') === '1') {
+    if (localStorage.getItem('xiaoyi-panel-closed') === '1') {
       panel.style.display = 'none'
       bubble.style.display = 'none'
     }
@@ -432,12 +432,12 @@ export function createFloatingPanel(
     // 隐藏而非销毁，记录关闭状态
     panel.style.display = 'none'
     bubble.style.display = 'none'
-    try { localStorage.setItem('tongwen-panel-closed', '1') } catch { /* ignore */ }
+    try { localStorage.setItem('xiaoyi-panel-closed', '1') } catch { /* ignore */ }
   }
 
   bubble.onclick = () => {
     setMinimized(false)
-    try { localStorage.removeItem('tongwen-panel-closed') } catch { /* ignore */ }
+    try { localStorage.removeItem('xiaoyi-panel-closed') } catch { /* ignore */ }
   }
 
   // ─── 拖拽逻辑（面板 & 气泡共用）───
@@ -512,13 +512,13 @@ export function createFloatingPanel(
 
   function loadPos(): { x: number; y: number } | null {
     try {
-      const s = localStorage.getItem('tongwen-panel-pos')
+      const s = localStorage.getItem('xiaoyi-panel-pos')
       return s ? JSON.parse(s) : null
     } catch { return null }
   }
 
   function savePos(x: number, y: number) {
-    try { localStorage.setItem('tongwen-panel-pos', JSON.stringify({ x, y })) } catch { /* ignore */ }
+    try { localStorage.setItem('xiaoyi-panel-pos', JSON.stringify({ x, y })) } catch { /* ignore */ }
   }
 
   // ─── 公开 API ───
@@ -547,7 +547,7 @@ export function createFloatingPanel(
     show() {
       panel.style.display = ''
       bubble.style.display = 'none'
-      try { localStorage.removeItem('tongwen-panel-closed') } catch { /* ignore */ }
+      try { localStorage.removeItem('xiaoyi-panel-closed') } catch { /* ignore */ }
     },
     destroy() { host.remove() },
   }

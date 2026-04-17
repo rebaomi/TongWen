@@ -21,9 +21,47 @@ let panelApi: ReturnType<typeof createFloatingPanel> | null = null
 let mutationObserver: MutationObserver | null = null
 const translatedNodes = new WeakSet<Text>()  // 追踪已翻译节点，避免重复翻译
 
+/**
+ * 当前页是否被"排除域名"覆盖（全局守卫）
+ * 所有翻译入口都必须先检查此标志，包括消息监听器
+ */
+let isExcluded = false
+
+/** 检查域名是否应排除，支持精确匹配和子域名匹配，自动去除空白 */
+function checkDomainExcluded(excludedDomains: string[]): boolean {
+  const hostname = location.hostname.toLowerCase()
+  return excludedDomains
+    .map(d => d.trim().toLowerCase().replace(/^https?:\/\//, '').split('/')[0])
+    .filter(Boolean)
+    .some(d => hostname === d || hostname.endsWith('.' + d))
+}
+
+/** 监听设置变更，实时更新排除状态（无需刷新页面） */
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'sync') return
+  const settingsKey = Object.keys(changes).find(k => k === 'xiaoyi_settings')
+  if (!settingsKey) return
+  const newVal = changes[settingsKey].newValue as Record<string, unknown> | undefined
+  if (!newVal) return
+
+  const newExcluded = (newVal['excludedDomains'] as string[] | undefined) ?? []
+  const newSiteOverrides = (newVal['siteOverrides'] as Record<string, { disabled?: boolean }> | undefined) ?? {}
+  const hostname = location.hostname
+
+  const wasExcluded = isExcluded
+  isExcluded = checkDomainExcluded(newExcluded) || !!(newSiteOverrides[hostname]?.disabled)
+
+  if (!wasExcluded && isExcluded) {
+    // 刚被排除：停止悬浮模式
+    disableHoverMode()
+    stopMutationObserver()
+  }
+})
+
 // ===== 主控制 =====
 
 async function translatePage(): Promise<void> {
+  if (isExcluded) return
   if (isPageTranslating) return
   isPageTranslating = true
   showLoadingBar()
@@ -55,7 +93,7 @@ async function translatePage(): Promise<void> {
       sidebarApi.setContext(ctx)
     }
   } catch (err) {
-    console.error('[TongWen] Page translation error:', err)
+    console.error('[xiaoyi] Page translation error:', err)
   } finally {
     isPageTranslating = false
     hideLoadingBar()
@@ -179,11 +217,13 @@ function toggleTranslation(): void {
 chrome.runtime.onMessage.addListener((message: { type: string; payload: unknown }, _sender, sendResponse) => {
   switch (message.type) {
     case 'TRANSLATE_PAGE':
+      if (isExcluded) { sendResponse({ success: false, reason: 'excluded' }); break }
       translatePage()
       sendResponse({ success: true })
       break
 
     case 'TOGGLE_TRANSLATION':
+      if (isExcluded) { sendResponse({ success: false, reason: 'excluded' }); break }
       toggleTranslation()
       sendResponse({ success: true })
       break
@@ -195,12 +235,13 @@ chrome.runtime.onMessage.addListener((message: { type: string; payload: unknown 
       disableHoverMode()
       currentMode = newMode
       panelApi?.setMode(newMode)
-      if (newMode === 'hover') enableHoverMode()
+      if (!isExcluded && newMode === 'hover') enableHoverMode()
       sendResponse({ success: true })
       break
     }
 
     case 'TOGGLE_MODE': {
+      if (isExcluded) { sendResponse({ success: false, reason: 'excluded' }); break }
       const modes: TranslateMode[] = ['bilingual', 'replace', 'hover']
       const idx = modes.indexOf(currentMode)
       const next = modes[(idx + 1) % modes.length]
@@ -283,13 +324,14 @@ function init(): void {
     if (!response?.success) return
     const settings = response.data
 
-    // 检查当前域名是否在排除列表或被域名覆盖设置禁用
+    // 设置全局排除标志（消息监听器和 translatePage 都会检查）
     const hostname = location.hostname
     const excluded = settings.excludedDomains ?? []
-    if (excluded.some(d => hostname === d || hostname.endsWith('.' + d))) return
-
     const siteOverride = (settings.siteOverrides ?? {})[hostname]
-    if (siteOverride?.disabled) return
+    isExcluded = checkDomainExcluded(excluded) || !!(siteOverride?.disabled)
+
+    // 被排除的域名：不初始化任何翻译功能
+    if (isExcluded) return
 
     // 域名覆盖模式
     currentMode = siteOverride?.translateMode ?? settings.translateMode ?? 'bilingual'
@@ -355,7 +397,7 @@ function init(): void {
 
 // 收集页面当前的翻译文本作为 AI 上下文
 function collectPageContext(): string {
-  const translated = document.querySelectorAll('.tongwen-translated')
+  const translated = document.querySelectorAll('.xiaoyi-translated')
   if (translated.length > 0) {
     return Array.from(translated).map(el => el.textContent?.trim()).filter(Boolean).slice(0, 50).join('\n')
   }
@@ -376,21 +418,21 @@ const MODE_NAMES: Record<TranslateMode, string> = {
 // 右键菜单翻译结果的悬浮面板（带原文+译文，可复制，自动消失）
 function showTranslationPopup(original: string, translated: string): void {
   // 移除已有面板
-  document.getElementById('tongwen-translation-popup')?.remove()
+  document.getElementById('xiaoyi-translation-popup')?.remove()
 
   const panel = document.createElement('div')
-  panel.id = 'tongwen-translation-popup'
+  panel.id = 'xiaoyi-translation-popup'
   panel.style.cssText = [
     'position:fixed', 'bottom:24px', 'right:24px', 'z-index:2147483647',
     'max-width:380px', 'min-width:260px', 'background:#fff',
     'border:1px solid #e5e7eb', 'border-radius:16px',
     'box-shadow:0 8px 32px rgba(0,0,0,0.15)', 'font-family:system-ui,sans-serif',
-    'overflow:hidden', 'animation:tongwen-slide-in 0.2s ease',
+    'overflow:hidden', 'animation:xiaoyi-slide-in 0.2s ease',
   ].join(';')
 
   panel.innerHTML = `
     <style>
-      @keyframes tongwen-slide-in { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
+      @keyframes xiaoyi-slide-in { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
     </style>
     <div style="padding:12px 14px 8px;background:#f8faff;border-bottom:1px solid #e5e7eb">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">

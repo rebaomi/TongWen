@@ -12,14 +12,14 @@ const COLOR_MAP: Record<HighlightColor, string> = {
   orange: '#fed7aa',
 }
 
-const MARK_CLASS = 'tongwen-highlight'
-const MARK_ATTR = 'data-tongwen-id'
+const MARK_CLASS = 'xiaoyi-highlight'
+const MARK_ATTR = 'data-xiaoyi-id'
 
 // 注入样式
 function injectHighlightStyles() {
-  if (document.getElementById('tongwen-highlight-styles')) return
+  if (document.getElementById('xiaoyi-highlight-styles')) return
   const style = document.createElement('style')
-  style.id = 'tongwen-highlight-styles'
+  style.id = 'xiaoyi-highlight-styles'
   style.textContent = Object.entries(COLOR_MAP)
     .map(([color, bg]) => `.${MARK_CLASS}[data-color="${color}"] { background: ${bg}; border-radius: 2px; cursor: pointer; }`)
     .join('\n')
@@ -151,10 +151,10 @@ function showHighlightMenu(
   _color: HighlightColor,
   onAskAi?: (text: string, id: string) => void,
 ) {
-  document.getElementById('tongwen-hl-menu')?.remove()
+  document.getElementById('xiaoyi-hl-menu')?.remove()
 
   const menu = document.createElement('div')
-  menu.id = 'tongwen-hl-menu'
+  menu.id = 'xiaoyi-hl-menu'
   const rect = mark.getBoundingClientRect()
   menu.style.cssText = [
     'position:fixed',

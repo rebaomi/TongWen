@@ -1,156 +1,180 @@
-# 🎓 TongWen — AI Academic Translation Chrome Extension
+# XiaoYi — AI Reading & Translation Assistant
 
-A Chrome extension focused on web page and academic PDF translation, supporting 14 mainstream AI translation engines with intelligent detection and preservation of mathematical formulas and citation formats.
+> Focused on webpage and academic PDF translation, with integrated AI chat, text annotation, and screenshot analysis. Supports 14 major translation/AI engines.
 
 [简体中文](./README.md) | [繁體中文](./README.zh-TW.md) | English
 
-## ✨ Features
+---
 
-### Web Page Translation
+## ✨ Core Features
+
+### 🌐 Webpage Translation
 
 | Mode | Description |
 |------|-------------|
 | 📖 Bilingual | Insert translation below original text, preserving layout |
-| 🔄 Replace | Replace page content with translated text |
-| 🖱️ Hover | Instant translation bubble on text selection |
+| 🔄 Replace | Replace page text directly with translation |
+| 🖱️ Hover | Instant translation bubble on text selection + "Ask AI" button |
 
-- **Shortcuts**: `Alt+T` to translate current page, `Alt+M` to switch mode
-- **Context Menu**: Translate selected text, full page, or linked pages
-- **Floating Panel**: Draggable floating control panel (enable in settings)
+- **Shortcuts**: `Alt+T` translate page, `Alt+M` cycle through modes
+- **Context menu**: Translate selection, full page, or linked pages
+- **Floating panel**: Draggable control panel for quick access (enable in settings)
+- **Dynamic content**: MutationObserver auto-translates content loaded after initial page render
+- **Smart skip**: Automatically skips code blocks, input fields, and non-translatable elements
+- **Translation cache**: Session-level cache for instant repeat lookups
+- **Auto retry**: Up to 2 automatic retries on network errors
 
-### PDF Translation (Optimized for Academic Papers)
+### 📄 Academic PDF Translation
 
-- 📐 **Auto-detects and preserves LaTeX math formulas** (`$...$`, `$$...$$`, `\begin{}` environments)
+- 📐 **Preserves LaTeX math formulas** (`$...$`, `$$...$$`, `\begin{}` environments)
 - 📖 **Preserves citation markers** (`[1]`, `(Author 2020)`, etc.)
-- 📄 **Paragraph-level bilingual view**: Merges lines into paragraphs matching the original layout
-- 🔗 **Remote PDF support**: Paste arXiv or any PDF URL to load and translate directly
-- 📥 **Export bilingual PDF**: Alternating original and translated pages with proper CJK font rendering via Canvas
+- 🗂️ **Two-column layout detection**: Correctly handles academic paper dual-column formats
+- 📄 **Paragraph-level bilingual view**: Translated paragraphs align with original
+- 📏 **Page range translation**: Translate only selected pages to save API costs
+- 💾 **Progress auto-save**: Resume interrupted translations across sessions
+- 🔗 **Direct URL support**: Paste arXiv or other PDF links to load directly
+- 📥 **Export bilingual PDF**: Alternating original and translated pages
 
-### 14 Translation Engines
+### 🤖 AI Reading Assistant
+
+- **AI Sidebar**: Full-height chat panel on the right side with streaming output; can inject current page content as context
+- **Visual analysis**: Capture any screen region and send to AI for chart/table/diagram analysis
+- **Select & Ask AI**: Select any text → floating toolbar → translate or send to AI for deep analysis
+- **Hover & Ask AI**: "Ask AI" button in hover translation bubble for seamless deep reading
+- **Text highlights**: 5-color annotation with persistence — highlights restored automatically on page reload
+- **Screenshot selection**: Drag to select any area of the page and auto-send to AI
+
+### ⚙️ Advanced Settings
+
+- **Custom glossary**: Define fixed translations for domain-specific terms
+- **Per-site configuration**: Set different engine, mode, or disable translation per domain
+- **Excluded domains**: Completely disable all translation features on specified sites (takes effect immediately, no reload needed)
+
+---
+
+## 🔌 14 Supported Engines
 
 | Engine | Highlights |
-|--------|-----------|
-| 🚀 DeepSeek | Best Chinese comprehension, lowest cost (recommended) |
-| ✨ OpenAI GPT | Highest overall quality with context awareness |
-| 🧡 Claude | Anthropic's model, excellent for humanities |
-| 💎 Google Gemini | Google's latest multimodal model |
-| ⚡ Grok | xAI's model with strong reasoning |
-| 🟣 Qwen (Tongyi) | Alibaba Cloud model, great Chinese support |
-| 🌙 Kimi | Moonshot AI, strong long-context understanding |
-| 🔷 GLM | Zhipu AI, academic-friendly |
-| 🌊 MiniMax | Long-text performance, domestic model |
-| 🫘 Doubao | ByteDance model, stable access in China |
+|--------|------------|
+| 🚀 DeepSeek | Best Chinese understanding, lowest cost (recommended) |
+| ✨ OpenAI GPT | Highest quality, vision support |
+| 🧡 Claude | Anthropic, excellent humanities understanding, vision support |
+| 💎 Google Gemini | Latest multimodal model from Google, vision support |
+| ⚡ Grok | xAI, strong reasoning, vision support |
+| 🟣 Qwen (Tongyi) | Alibaba Cloud, excellent Chinese |
+| 🌙 Kimi | Moonshot AI, long context understanding |
+| 🔷 GLM (Zhipu) | Tsinghua, academic-friendly |
+| 🌊 MiniMax | Domestic LLM, great for long texts |
+| 🫘 Doubao | ByteDance, stable domestic access |
 | 🌐 Google Translate | Fast, wide language coverage |
 | 🔵 DeepL | Best quality for European languages |
-| 🔴 Baidu Translate | Stable access in China |
-| 💻 Local Model (Ollama) | Fully offline, no API key required |
+| 🔴 Baidu Translate | Stable access in mainland China |
+| 💻 Local (Ollama) | Fully offline, no API key required |
 
-### Security Design
+> AI chat supported by: DeepSeek / OpenAI / Claude / Gemini / Grok / Qwen / Kimi / GLM / MiniMax / Doubao / Ollama
 
-- API Keys stored in `chrome.storage.local` — **never synced to the cloud**
-- Content scripts cannot access API Keys; keys only exist briefly in Service Worker memory
-- Service Worker validates message origins, rejecting unauthorized callers
+---
 
-### Free Quota
+## 🔒 Security
 
-- **100 free translations per day**
-- Full-page translation and PDF translation each count as 1 use, not per text chunk
+- API Keys stored in local `chrome.storage.local` — **never synced to the cloud**
+- Content scripts cannot access API Keys directly; keys only reside briefly in Service Worker memory
+- Service Worker validates message origin to reject unauthorized calls
+- API Key fields are masked by default in the settings UI
+
+---
 
 ## 🚀 Getting Started
 
-### Install Dependencies
+### Install dependencies
 
 ```bash
 npm install
 ```
 
-### Build for Production
+### Build
 
 ```bash
 npm run build
 ```
 
-### Load into Chrome
+### Load in Chrome
 
 1. Open `chrome://extensions/`
-2. Enable **Developer mode** (top right)
+2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
-4. Select the `dist/` folder in the project root
+4. Select the **`dist/`** folder inside the project directory
 
-## 🔧 Engine Configuration
+> After modifying source code, run `npm run build`, then click the refresh button (↻) on the extension card.
 
-Click the extension icon → ⚙️ (top right) → Settings page → select an engine and enter your API Key.
+---
 
-### Recommended: DeepSeek
+## 🔧 Engine Setup
 
-1. Sign up at [platform.deepseek.com](https://platform.deepseek.com)
-2. Create an API Key and paste it into settings
+Click the extension icon → ⚙️ Settings → choose your engine and enter the API Key.
 
-### Local Model (Free & Offline)
+### Recommended
 
-1. Install [Ollama](https://ollama.ai)
-2. Pull a model: `ollama pull qwen2.5:7b`
-3. Start the service: `ollama serve`
-4. **You must set the CORS environment variable** or you'll get 403 errors:
+**DeepSeek (best value)**
+1. Register at [platform.deepseek.com](https://platform.deepseek.com) and create an API Key
+2. Paste it into the DeepSeek engine field in settings
+
+**Local model (completely free, offline)**
+1. Install [Ollama](https://ollama.ai) and pull a model: `ollama pull qwen2.5:7b`
+2. Set CORS or you'll get a 403 error:
 
 ```powershell
-# Windows PowerShell (permanent)
+# Windows (permanent, restart Ollama after)
 [System.Environment]::SetEnvironmentVariable("OLLAMA_ORIGINS", "*", "User")
-# Then restart Ollama
 ```
 
 ```bash
 # macOS / Linux
-export OLLAMA_ORIGINS='*'
-ollama serve
+export OLLAMA_ORIGINS='*' && ollama serve
 ```
+
+---
 
 ## 📁 Project Structure
 
 ```
 src/
 ├── background/
-│   └── service-worker.ts      # Background SW: handles translation requests & message routing
+│   └── service-worker.ts        # Background SW: translation, AI chat, screenshot, routing
 ├── content/
-│   ├── index.ts               # Main content script controller
-│   ├── bilingual.ts           # Bilingual mode injection
-│   ├── hover.ts               # Hover/selection translation bubble
-│   ├── floating-panel.ts      # Draggable floating panel (Shadow DOM isolated)
-│   ├── translator.ts          # Translation calls with formula protection
-│   ├── formula-detector.ts    # LaTeX formula detection & restoration
-│   ├── ui.ts                  # Toast notifications & loading bar
-│   └── styles.css             # Injected styles
-├── engines/                   # Translation engine adapters (14 engines)
-│   ├── base-openai.ts         # Shared base class for OpenAI-compatible APIs
-│   ├── deepseek.ts
-│   ├── openai.ts
-│   ├── claude.ts              # Anthropic API (custom format)
-│   ├── gemini.ts              # Google Gemini API (custom format)
-│   ├── qwen.ts
-│   ├── kimi.ts
-│   ├── glm.ts
-│   ├── minimax.ts
-│   ├── grok.ts
-│   ├── doubao.ts
-│   ├── google.ts
-│   ├── deepl.ts
-│   ├── baidu.ts
-│   └── local.ts               # Ollama local model
+│   ├── index.ts                 # Content script main entry
+│   ├── bilingual.ts             # Bilingual display mode
+│   ├── hover.ts                 # Hover translation bubble
+│   ├── floating-panel.ts        # Floating control panel (Shadow DOM)
+│   ├── ai-sidebar.ts            # AI chat sidebar (Shadow DOM, streaming)
+│   ├── highlighter.ts           # Multi-color text highlights + persistence
+│   ├── selection-toolbar.ts     # Floating toolbar for text selections
+│   ├── screenshot.ts            # Region screenshot + AI analysis
+│   ├── translator.ts            # Translation calls + formula protection + retry
+│   ├── formula-detector.ts      # LaTeX formula detection
+│   ├── ui.ts                    # Toast / loading bar
+│   └── styles.css               # Injected styles
+├── engines/                     # 14 engine adapters
+│   ├── chat.ts                  # AI chat capability (streaming, vision support)
+│   ├── base-openai.ts           # OpenAI-compatible base class
+│   └── ...                      # deepseek, openai, claude, gemini, qwen, etc.
 ├── pdf/
-│   ├── PdfViewer.tsx          # PDF viewer (supports URL & local file)
-│   ├── pdf-processor.ts       # PDF parsing, paragraph merging & translation
-│   ├── pdf-exporter.ts        # Bilingual PDF export (Canvas-based CJK rendering)
+│   ├── PdfViewer.tsx            # PDF viewer (URL & local file)
+│   ├── pdf-processor.ts         # Parsing, paragraph merging, two-column detection
+│   ├── pdf-exporter.ts          # Bilingual PDF export (Canvas Chinese rendering)
 │   └── main.tsx
-├── popup/                     # Extension popup UI
-├── options/                   # Settings page
+├── popup/                       # Popup UI
+├── options/                     # Settings page (glossary, per-site overrides)
 ├── shared/
-│   ├── types.ts               # TypeScript type definitions
-│   └── constants.ts           # Engine configs & default settings
+│   ├── types.ts                 # TypeScript type definitions
+│   └── constants.ts             # Engine config, default settings
 └── utils/
-    ├── storage.ts             # Chrome Storage wrapper (API Key security isolation)
-    ├── messaging.ts           # Service Worker message retry utility
-    └── usage.ts               # Daily usage tracking
+    ├── storage.ts               # Chrome Storage wrapper (API Key isolation)
+    ├── messaging.ts             # Service Worker message retry utility
+    └── usage.ts                 # Usage quota management
 ```
+
+---
 
 ## 🛠️ Tech Stack
 
@@ -159,22 +183,15 @@ src/
 | Vite 5 + CRXJS | Chrome Extension build toolchain |
 | React 19 + TypeScript | UI framework |
 | Tailwind CSS v4 | Styling |
-| PDF.js (Mozilla) | PDF rendering & text extraction |
-| pdf-lib | PDF file generation |
-| Shadow DOM | Floating panel style isolation |
-| Chrome Storage API | Settings & data persistence |
-| Manifest V3 | Chrome Extension standard |
+| PDF.js (Mozilla) | PDF rendering and text extraction |
+| pdf-lib | Bilingual PDF generation |
+| Shadow DOM | Style isolation for panels and sidebar |
+| Chrome Storage API | Settings and data persistence |
+| Manifest V3 | Chrome Extension specification |
+| Vitest + jsdom | Unit testing |
+| GitHub Actions | CI/CD auto-build and release |
 
-## 🗺️ Roadmap
-
-- [ ] Translation cache (avoid re-translating identical text)
-- [ ] Two-column PDF layout detection (common in academic papers)
-- [ ] MutationObserver for SPA dynamic content
-- [ ] Skip `<code>` / `<pre>` blocks
-- [ ] Page range selection for PDF translation
-- [ ] Custom terminology glossary
-- [ ] Per-site engine/mode configuration
-- [ ] GitHub Actions CI for automated builds
+---
 
 ## 📄 License
 

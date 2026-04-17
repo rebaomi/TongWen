@@ -166,7 +166,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
 }
 
 export const STORAGE_KEYS = {
-  SETTINGS: 'tongwen_settings',
-  USAGE: 'tongwen_usage',
-  SUBSCRIPTION: 'tongwen_subscription',
+  SETTINGS: 'xiaoyi_settings',
+  USAGE: 'xiaoyi_usage',
+  SUBSCRIPTION: 'xiaoyi_subscription',
 } as const

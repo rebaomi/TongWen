@@ -5,7 +5,7 @@
 import type { HighlightColor } from '@/shared/types'
 import { highlightSelection } from './highlighter'
 
-const TOOLBAR_ID = 'tongwen-selection-toolbar'
+const TOOLBAR_ID = 'xiaoyi-selection-toolbar'
 const COLORS: [HighlightColor, string, string][] = [
   ['yellow', '🟡', '#fef08a'],
   ['green',  '🟢', '#bbf7d0'],
@@ -138,12 +138,12 @@ export function initSelectionToolbar(cbs: ToolbarCallbacks) {
         return
       }
 
-      // 不在 tongwen 自己的 UI 里
+      // 不在 XiaoYi 自己的 UI 里
       const target = e.target as Element
       if (
-        target.id?.startsWith?.('tongwen') ||
-        target.closest?.('#tongwen-ai-sidebar') ||
-        target.closest?.('#tongwen-selection-toolbar')
+        target.id?.startsWith?.('xiaoyi') ||
+        target.closest?.('#xiaoyi-ai-sidebar') ||
+        target.closest?.('#xiaoyi-selection-toolbar')
       ) return
 
       const range = sel!.getRangeAt(0)

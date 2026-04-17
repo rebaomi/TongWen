@@ -24,7 +24,7 @@ export function startScreenshotSelection(onCapture: ScreenshotCallback) {
 function showSelectionOverlay(screenshotUrl: string, onCapture: ScreenshotCallback) {
   // 覆盖层：用截图作背景，让用户看到"冻结"的页面
   const overlay = document.createElement('div')
-  overlay.id = 'tongwen-screenshot-overlay'
+  overlay.id = 'xiaoyi-screenshot-overlay'
   overlay.style.cssText = [
     'position:fixed',
     'inset:0',

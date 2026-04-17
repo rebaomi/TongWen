@@ -6,7 +6,7 @@ import { DEFAULT_SETTINGS, STORAGE_KEYS } from '@/shared/constants'
 // API Key 单独存 local，不上云
 // ─────────────────────────────────────────────
 
-const APIKEYS_STORAGE_KEY = 'tongwen_apikeys'
+const APIKEYS_STORAGE_KEY = 'xiaoyi_apikeys'
 
 type ApiKeys = Partial<Record<EngineId, string>>
 
