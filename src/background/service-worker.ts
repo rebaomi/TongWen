@@ -1,14 +1,99 @@
 import { translate } from '@/engines'
 import {
+  chatOpenAICompatible, chatGemini, chatClaude, supportsChatEngine,
+} from '@/engines/chat'
+import {
   getSettings, getSettingsWithKeys, saveSettings,
   incrementUsage, isProActive, getUsage, saveApiKey, deleteApiKey, getApiKeys,
 } from '@/utils/storage'
 import { getUsageStatus } from '@/utils/usage'
 import { FREE_DAILY_LIMIT } from '@/shared/types'
-import type { Message, MessageResponse, TranslateOptions, EngineId } from '@/shared/types'
+import type { Message, MessageResponse, TranslateOptions, EngineId, ChatMessage, Highlight } from '@/shared/types'
 
 // Session-level translation cache: key = "engine:from:to:text" → translated
 const translationCache = new Map<string, string>()
+
+// ── 高亮标注持久化 ────────────────────────────────────────────
+const HIGHLIGHTS_KEY = 'tongwen_highlights'
+
+async function getAllHighlights(): Promise<Highlight[]> {
+  const r = await chrome.storage.local.get(HIGHLIGHTS_KEY)
+  return (r[HIGHLIGHTS_KEY] as Highlight[]) ?? []
+}
+
+async function saveHighlight(h: Highlight): Promise<void> {
+  const list = await getAllHighlights()
+  list.push(h)
+  await chrome.storage.local.set({ [HIGHLIGHTS_KEY]: list })
+}
+
+async function deleteHighlight(id: string): Promise<void> {
+  const list = await getAllHighlights()
+  await chrome.storage.local.set({ [HIGHLIGHTS_KEY]: list.filter(h => h.id !== id) })
+}
+
+// ── AI Chat 流式端口 ──────────────────────────────────────────
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'tongwen-ai-chat') return
+
+  port.onMessage.addListener(async (msg: {
+    messages: ChatMessage[]
+    context?: string
+    imageUrl?: string
+  }) => {
+    try {
+      const settings = await getSettingsWithKeys()
+      const engineId = settings.activeEngine
+      const config = settings.engines[engineId]
+
+      if (!supportsChatEngine(engineId)) {
+        port.postMessage({ type: 'error', error: `当前引擎「${config?.name ?? engineId}」不支持 AI 对话，请在设置中切换到 DeepSeek / OpenAI / Gemini 等支持对话的引擎` })
+        return
+      }
+
+      // 注入页面上下文作为 system 消息
+      const systemContent = msg.context
+        ? `你是一个智能阅读助手，正在帮助用户阅读以下内容：\n\n${msg.context.slice(0, 3000)}\n\n请根据内容回答用户的问题，使用中文回答。`
+        : '你是一个智能阅读助手，帮助用户理解学术文章和网页内容。请使用中文回答。'
+
+      const allMessages: ChatMessage[] = [
+        { role: 'user', content: systemContent, id: 'sys', timestamp: 0 },
+        ...msg.messages,
+      ]
+
+      const onChunk = (chunk: string) => {
+        try { port.postMessage({ type: 'chunk', text: chunk }) } catch { /* port closed */ }
+      }
+
+      if (engineId === 'gemini') {
+        await chatGemini(allMessages, config, onChunk, msg.imageUrl)
+      } else if (engineId === 'claude') {
+        await chatClaude(allMessages, config, onChunk, msg.imageUrl)
+      } else {
+        // OpenAI 兼容引擎
+        const ENGINE_URLS: Partial<Record<EngineId, { url: string; model: string }>> = {
+          openai:   { url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+          deepseek: { url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+          qwen:     { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+          minimax:  { url: 'https://api.minimaxi.chat/v1', model: 'MiniMax-Text-01' },
+          kimi:     { url: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k' },
+          glm:      { url: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+          grok:     { url: 'https://api.x.ai/v1', model: 'grok-3-mini' },
+          doubao:   { url: 'https://ark.cn-beijing.volces.com/api/v3', model: 'doubao-pro-4k' },
+          local:    { url: 'http://127.0.0.1:11434/v1', model: '' },
+        }
+        const defaults = ENGINE_URLS[engineId] ?? { url: 'https://api.openai.com/v1', model: 'gpt-4o-mini' }
+        const baseUrl = config.apiUrl?.trim() || defaults.url
+        const model = config.model?.trim() || defaults.model
+        await chatOpenAICompatible(allMessages, config, baseUrl, model, config.name, onChunk, msg.imageUrl)
+      }
+
+      port.postMessage({ type: 'done' })
+    } catch (e) {
+      try { port.postMessage({ type: 'error', error: String(e).replace(/^Error:\s*/, '') }) } catch { /* port closed */ }
+    }
+  })
+})
 
 // 安装时初始化右键菜单
 chrome.runtime.onInstalled.addListener(() => {
@@ -174,6 +259,34 @@ async function handleMessage(message: Message, sender: chrome.runtime.MessageSen
       case 'OPEN_OPTIONS': {
         chrome.runtime.openOptionsPage()
         return { success: true }
+      }
+
+      // ── 高亮标注 ──────────────────────────────────────────
+      case 'SAVE_HIGHLIGHT': {
+        await saveHighlight(message.payload as Highlight)
+        return { success: true }
+      }
+
+      case 'GET_HIGHLIGHTS': {
+        const { url } = message.payload as { url: string }
+        const all = await getAllHighlights()
+        return { success: true, data: all.filter(h => h.url === url) }
+      }
+
+      case 'DELETE_HIGHLIGHT': {
+        const { id } = message.payload as { id: string }
+        await deleteHighlight(id)
+        return { success: true }
+      }
+
+      // ── 截图 ──────────────────────────────────────────────
+      case 'TAKE_SCREENSHOT': {
+        try {
+          const dataUrl = await chrome.tabs.captureVisibleTab({ format: 'png' })
+          return { success: true, data: { dataUrl } }
+        } catch (e) {
+          return { success: false, error: String(e) }
+        }
       }
 
       case 'GET_USAGE': {

@@ -5,6 +5,10 @@ import { translateWithFormulaProtection, recordOneUse } from './translator'
 let tooltip: HTMLElement | null = null
 let hideTimer: number | undefined
 
+// 问 AI 的回调，由 index.ts 在初始化后注入
+export let onAskAiFromHover: ((text: string) => void) | null = null
+export function setAskAiCallback(fn: (text: string) => void) { onAskAiFromHover = fn }
+
 function getOrCreateTooltip(): HTMLElement {
   if (tooltip) return tooltip
 
@@ -46,10 +50,17 @@ function setTooltipResult(translated: string, original: string): void {
     <div class="scholar-tooltip-original">${escapeHtml(original)}</div>
     <div class="scholar-tooltip-footer">
       <span class="scholar-copy-btn" title="复制译文">📋 复制</span>
+      <span class="scholar-ask-ai-btn" title="在 AI 助手中继续探讨">🤖 问 AI</span>
     </div>`
 
   el.querySelector('.scholar-copy-btn')?.addEventListener('click', () => {
     navigator.clipboard.writeText(translated)
+  })
+  el.querySelector('.scholar-ask-ai-btn')?.addEventListener('click', () => {
+    if (onAskAiFromHover) {
+      onAskAiFromHover(`原文：${original}\n译文：${translated}\n\n请帮我深入解释这句话的含义。`)
+    }
+    hideTooltip()
   })
 }
 

@@ -84,6 +84,29 @@ export interface PdfTranslateOptions extends TranslateOptions {
   preserveLayout: boolean
 }
 
+// ===== AI 对话 =====
+export interface ChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  id: string
+  timestamp: number
+  imageUrl?: string   // base64 data URL（视觉分析用）
+}
+
+// ===== 高亮标注 =====
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink' | 'orange'
+
+export interface Highlight {
+  id: string
+  text: string
+  color: HighlightColor
+  url: string
+  note?: string
+  before: string    // 上下文前缀（用于恢复定位）
+  after: string     // 上下文后缀
+  createdAt: number
+}
+
 // ===== 消息通信 =====
 export type MessageType =
   | 'TRANSLATE_TEXT'
@@ -101,6 +124,12 @@ export type MessageType =
   | 'GET_APIKEY_HINT'
   | 'OPEN_OPTIONS'
   | 'SHOW_PANEL'
+  | 'TAKE_SCREENSHOT'
+  | 'TOGGLE_AI_SIDEBAR'
+  | 'SAVE_HIGHLIGHT'
+  | 'GET_HIGHLIGHTS'
+  | 'DELETE_HIGHLIGHT'
+  | 'SEND_TO_AI'
 
 export interface Message<T = unknown> {
   type: MessageType

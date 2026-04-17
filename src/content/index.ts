@@ -1,10 +1,17 @@
 import type { TranslateMode } from '@/shared/types'
 import { getTranslatableNodes, translateWithFormulaProtection, recordOneUse } from './translator'
 import { injectBilingualTranslation, removeBilingualTranslations, isTranslated } from './bilingual'
-import { enableHoverMode, disableHoverMode } from './hover'
+import { enableHoverMode, disableHoverMode, setAskAiCallback } from './hover'
 import { showProUpgradeToast, showLoadingBar, hideLoadingBar, showErrorToast } from './ui'
 import { createFloatingPanel } from './floating-panel'
 import { shouldSkipNode } from './formula-detector'
+import { createAiSidebar } from './ai-sidebar'
+import type { AiSidebarApi } from './ai-sidebar'
+import { initSelectionToolbar, highlightSelection } from './selection-toolbar'
+import { restoreHighlights } from './highlighter'
+import { startScreenshotSelection } from './screenshot'
+
+let sidebarApi: AiSidebarApi | null = null
 
 let currentMode: TranslateMode = 'bilingual'
 let isPageTranslating = false
@@ -41,6 +48,12 @@ async function translatePage(): Promise<void> {
 
     isPageTranslated = true
     startMutationObserver()
+
+    // 翻译完成后注入页面上下文到侧边栏
+    if (sidebarApi) {
+      const ctx = collectPageContext()
+      sidebarApi.setContext(ctx)
+    }
   } catch (err) {
     console.error('[TongWen] Page translation error:', err)
   } finally {
@@ -219,6 +232,11 @@ chrome.runtime.onMessage.addListener((message: { type: string; payload: unknown 
           },
           onOpenSettings: () => chrome.runtime.sendMessage({ type: 'OPEN_OPTIONS' }),
           onOpenPdf: () => chrome.tabs.create?.({ url: chrome.runtime.getURL('pdf/index.html') }),
+          onOpenAi: () => { if (!sidebarApi) sidebarApi = createAiSidebar(); sidebarApi.toggle() },
+          onScreenshot: () => startScreenshotSelection((dataUrl) => {
+            if (!sidebarApi) sidebarApi = createAiSidebar()
+            sidebarApi.sendMessage('请分析这张截图，描述其内容并提供洞察。', dataUrl)
+          }),
         })
       }
       sendResponse({ success: true })
@@ -228,6 +246,21 @@ chrome.runtime.onMessage.addListener((message: { type: string; payload: unknown 
     case 'SHOW_TRANSLATION_POPUP': {
       const { original, translated } = message.payload as { original: string; translated: string }
       showTranslationPopup(original, translated)
+      break
+    }
+
+    case 'TOGGLE_AI_SIDEBAR': {
+      if (!sidebarApi) sidebarApi = createAiSidebar()
+      sidebarApi.toggle()
+      sendResponse({ success: true })
+      break
+    }
+
+    case 'SEND_TO_AI': {
+      const { text, imageUrl } = message.payload as { text?: string; imageUrl?: string }
+      if (!sidebarApi) sidebarApi = createAiSidebar()
+      sidebarApi.sendMessage(text ?? '', imageUrl)
+      sendResponse({ success: true })
       break
     }
   }
@@ -264,7 +297,36 @@ function init(): void {
     if (currentMode === 'hover') enableHoverMode()
     if (settings.autoTranslatePage) translatePage()
 
-    // 仅在用户开启后才创建悬浮面板
+    // ── 初始化 AI 侧边栏 ──────────────────────────────────────
+    sidebarApi = createAiSidebar()
+
+    // 注入"问 AI"回调到悬浮翻译气泡
+    setAskAiCallback((text) => {
+      sidebarApi!.sendMessage(text)
+    })
+
+    // ── 初始化选中文字工具栏 ──────────────────────────────────
+    initSelectionToolbar({
+      onTranslate: (text) => {
+        sidebarApi!.sendMessage(`请翻译以下内容为中文：\n\n${text}`)
+      },
+      onAskAi: (text) => {
+        sidebarApi!.sendMessage(`请帮我解释以下内容：\n\n${text}`)
+      },
+      onHighlight: (color) => {
+        highlightSelection(color, (hlText, _id) => {
+          // 高亮后可选追问
+          sidebarApi!.sendMessage(`请帮我解释这段高亮内容：\n\n${hlText}`)
+        })
+      },
+    })
+
+    // ── 恢复页面高亮 ──────────────────────────────────────────
+    restoreHighlights((hlText, _id) => {
+      sidebarApi!.sendMessage(`请帮我解释这段高亮内容：\n\n${hlText}`)
+    })
+
+    // ── 仅在用户开启后才创建悬浮面板 ─────────────────────────
     if (settings.showFloatingPanel) {
       panelApi = createFloatingPanel(currentMode, {
         onTranslatePage: translatePage,
@@ -282,9 +344,27 @@ function init(): void {
         onOpenPdf: () => {
           chrome.tabs.create?.({ url: chrome.runtime.getURL('pdf/index.html') })
         },
+        onOpenAi: () => sidebarApi!.toggle(),
+        onScreenshot: () => startScreenshotSelection((dataUrl) => {
+          sidebarApi!.sendMessage('请分析这张截图，描述其内容并提供洞察。', dataUrl)
+        }),
       })
     }
   })
+}
+
+// 收集页面当前的翻译文本作为 AI 上下文
+function collectPageContext(): string {
+  const translated = document.querySelectorAll('.tongwen-translated')
+  if (translated.length > 0) {
+    return Array.from(translated).map(el => el.textContent?.trim()).filter(Boolean).slice(0, 50).join('\n')
+  }
+  // 回退：取正文段落文本
+  const paras = Array.from(document.querySelectorAll('p, h1, h2, h3, article'))
+    .map(el => el.textContent?.trim())
+    .filter(t => t && t.length > 20)
+    .slice(0, 30)
+  return paras.join('\n').slice(0, 4000)
 }
 
 const MODE_NAMES: Record<TranslateMode, string> = {

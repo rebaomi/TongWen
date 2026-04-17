@@ -6,6 +6,8 @@ type PanelCallbacks = {
   onModeChange: (mode: TranslateMode) => void
   onOpenSettings: () => void
   onOpenPdf: () => void
+  onOpenAi?: () => void
+  onScreenshot?: () => void
 }
 
 const PANEL_CSS = `
@@ -358,8 +360,22 @@ export function createFloatingPanel(
   btnPdf.innerHTML = `📄<span>PDF</span>`
   btnPdf.onclick = callbacks.onOpenPdf
 
+  const btnAi = document.createElement('button')
+  btnAi.className = 'btn-icon'
+  btnAi.innerHTML = `🤖<span>AI</span>`
+  btnAi.title = 'AI 阅读助手'
+  btnAi.onclick = () => callbacks.onOpenAi?.()
+
+  const btnShot = document.createElement('button')
+  btnShot.className = 'btn-icon'
+  btnShot.innerHTML = `📷<span>截图</span>`
+  btnShot.title = '框选截图 + AI 分析'
+  btnShot.onclick = () => callbacks.onScreenshot?.()
+
   footer.appendChild(btnSettings)
   footer.appendChild(btnPdf)
+  footer.appendChild(btnAi)
+  footer.appendChild(btnShot)
 
   // 组装 body
   body.appendChild(btnTranslate)
