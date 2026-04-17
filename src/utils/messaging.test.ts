@@ -1,25 +1,38 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import type { Mock } from 'vitest'
 
-// Mock chrome API
-const mockSendMessage = vi.fn()
-vi.stubGlobal('chrome', {
-  runtime: {
-    sendMessage: mockSendMessage,
-    lastError: null,
-  },
+let mockSendMessage: Mock
+let sendMessage: typeof import('./messaging').sendMessage
+
+beforeAll(async () => {
+  // Mock chrome API before importing the module
+  mockSendMessage = vi.fn()
+  vi.stubGlobal('chrome', {
+    runtime: {
+      sendMessage: mockSendMessage,
+      lastError: null as { message?: string } | null,
+    },
+  })
+  const mod = await import('./messaging')
+  sendMessage = mod.sendMessage
 })
-
-// Import after stub
-const { sendMessage } = await import('./messaging')
 
 describe('sendMessage', () => {
   beforeEach(() => {
     mockSendMessage.mockReset()
-    Object.defineProperty(chrome.runtime, 'lastError', { value: null, writable: true })
+    // Reset lastError to null before each test
+    ;(globalThis as Record<string, unknown>).chrome = {
+      runtime: {
+        sendMessage: mockSendMessage,
+        lastError: null as { message?: string } | null,
+      },
+    }
   })
 
   it('resolves with response on success', async () => {
     mockSendMessage.mockImplementation((_msg: unknown, cb: (r: unknown) => void) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(globalThis as any).chrome.runtime.lastError = null
       cb({ success: true, data: 'hello' })
     })
     const result = await sendMessage({ type: 'TEST' })
@@ -28,10 +41,8 @@ describe('sendMessage', () => {
 
   it('rejects when lastError is set', async () => {
     mockSendMessage.mockImplementation((_msg: unknown, cb: (r: unknown) => void) => {
-      Object.defineProperty(chrome.runtime, 'lastError', {
-        value: { message: 'Some error' },
-        writable: true,
-      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(globalThis as any).chrome.runtime.lastError = { message: 'Some error' }
       cb(null)
     })
     await expect(sendMessage({ type: 'TEST' }, 1)).rejects.toThrow('Some error')
@@ -42,13 +53,12 @@ describe('sendMessage', () => {
     mockSendMessage.mockImplementation((_msg: unknown, cb: (r: unknown) => void) => {
       attempt++
       if (attempt === 1) {
-        Object.defineProperty(chrome.runtime, 'lastError', {
-          value: { message: 'Receiving end does not exist' },
-          writable: true,
-        })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(globalThis as any).chrome.runtime.lastError = { message: 'Receiving end does not exist' }
         cb(null)
       } else {
-        Object.defineProperty(chrome.runtime, 'lastError', { value: null, writable: true })
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(globalThis as any).chrome.runtime.lastError = null
         cb({ success: true })
       }
     })
